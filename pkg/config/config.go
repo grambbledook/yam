@@ -1,6 +1,10 @@
 package config
 
-import "os"
+import (
+	"os"
+
+	"github.com/spf13/pflag"
+)
 
 type Config struct {
 	Port      string
@@ -8,15 +12,21 @@ type Config struct {
 	KeyPath   string
 }
 
-func DefaultConfig() Config {
+func Load() Config {
+	port := pflag.String("port", envOr("PORT", "8080"), "Server port")
+	issuerURL := pflag.String("issuer-url", envOr("ISSUER_URL", "http://localhost:8080"), "Issuer URL")
+	keyPath := pflag.String("key-path", envOr("KEY_PATH", ""), "Path to key file")
+
+	pflag.Parse()
+
 	return Config{
-		Port:      getenv("PORT", "8080"),
-		IssuerURL: getenv("ISSUER_URL", "http://localhost:8080"),
-		KeyPath:   getenv("KEY_PATH", ""),
+		Port:      *port,
+		IssuerURL: *issuerURL,
+		KeyPath:   *keyPath,
 	}
 }
 
-func getenv(key, fallback string) string {
+func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
 	}

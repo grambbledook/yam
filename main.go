@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	cfg := config.DefaultConfig()
+	cfg := config.Load()
 
 	mux := http.NewServeMux()
 
