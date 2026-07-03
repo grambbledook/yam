@@ -1,2 +1,6 @@
 bin
 tmp
+junk
+.venv
+
+yam
