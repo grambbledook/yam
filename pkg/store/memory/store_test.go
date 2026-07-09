@@ -29,3 +29,26 @@ func TestStore_Register(t *testing.T) {
 	require.NoError(t, err)
 
 }
+
+func TestStore_Authenticate(t *testing.T) {
+	s := NewStore()
+
+	id := "test-client"
+	secret := "tomatos are berries"
+	redirectURIs := []string{"https://example.com/callback"}
+	grantTypes := []string{"authorization_code"}
+	scopes := []string{"read", "write"}
+
+	_, err := s.Register(id, secret, redirectURIs, grantTypes, scopes)
+	require.NoError(t, err)
+
+	client, err := s.Authenticate(id, secret)
+	require.NoError(t, err)
+	require.Equal(t, id, client.ID)
+
+	_, err = s.Authenticate(id, "wrong secret")
+	require.Error(t, err)
+
+	_, err = s.Authenticate("unknown-client", secret)
+	require.Error(t, err)
+}

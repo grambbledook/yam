@@ -51,3 +51,16 @@ func (s *Store) GetClient(id string) (*store.Client, error) {
 
 	return client, nil
 }
+
+func (s *Store) Authenticate(id, secret string) (*store.Client, error) {
+	client, err := s.GetClient(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(client.Secret), []byte(secret)); err != nil {
+		return nil, fmt.Errorf("invalid credentials for client %s", id)
+	}
+
+	return client, nil
+}
