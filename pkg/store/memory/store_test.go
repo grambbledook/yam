@@ -2,6 +2,7 @@ package memory
 
 import (
 	"testing"
+	"yam/pkg/store"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
@@ -16,7 +17,7 @@ func TestStore_Register(t *testing.T) {
 	grantTypes := []string{"authorization_code"}
 	scopes := []string{"read", "write"}
 
-	client, err := s.Register(id, secret, redirectURIs, grantTypes, scopes)
+	client, err := s.Register(id, store.Confidential, secret, redirectURIs, grantTypes, scopes)
 	require.NoError(t, err, "Register should not return an error")
 
 	require.Equal(t, id, client.ID)
@@ -39,7 +40,7 @@ func TestStore_Authenticate(t *testing.T) {
 	grantTypes := []string{"authorization_code"}
 	scopes := []string{"read", "write"}
 
-	_, err := s.Register(id, secret, redirectURIs, grantTypes, scopes)
+	_, err := s.Register(id, store.Confidential, secret, redirectURIs, grantTypes, scopes)
 	require.NoError(t, err)
 
 	client, err := s.Authenticate(id, secret)

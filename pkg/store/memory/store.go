@@ -19,7 +19,7 @@ func NewStore() *Store {
 	}
 }
 
-func (s *Store) Register(id, secret string, redirectURId, grantTypes, scopes []string) (*store.Client, error) {
+func (s *Store) Register(id string, clientType store.ClientType, secret string, redirectURId, grantTypes, scopes []string) (*store.Client, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(secret), 12)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
@@ -27,6 +27,7 @@ func (s *Store) Register(id, secret string, redirectURId, grantTypes, scopes []s
 
 	client := &store.Client{
 		ID:           id,
+		ClientType:   clientType,
 		Secret:       string(hashedPassword),
 		RedirectURIs: redirectURId,
 		GrantTypes:   grantTypes,
