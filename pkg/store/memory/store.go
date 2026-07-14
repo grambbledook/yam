@@ -2,6 +2,9 @@ package memory
 
 import (
 	"fmt"
+	"net"
+	"net/url"
+	"strings"
 	"sync"
 	"yam/pkg/store"
 
@@ -19,17 +22,22 @@ func NewStore() *Store {
 	}
 }
 
-func (s *Store) Register(id string, clientType store.ClientType, secret string, redirectURId, grantTypes, scopes []string) (*store.Client, error) {
+func (s *Store) Register(id string, clientType store.ClientType, secret string, redirectURIs, grantTypes, scopes []string) (*store.Client, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(secret), 12)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
+	for _, uri := range redirectURIs {
+		if err := isValidRedirectUrl(uri); err != nil {
+			return nil, fmt.Errorf("invalid redirect uri %s: %w", uri, err)
+		}
+	}
 	client := &store.Client{
 		ID:           id,
 		ClientType:   clientType,
 		Secret:       string(hashedPassword),
-		RedirectURIs: redirectURId,
+		RedirectURIs: redirectURIs,
 		GrantTypes:   grantTypes,
 		Scopes:       scopes,
 	}
@@ -39,6 +47,46 @@ func (s *Store) Register(id string, clientType store.ClientType, secret string, 
 
 	s.clients[id] = client
 	return client, nil
+}
+
+func isValidRedirectUrl(raw string) error {
+	uri, err := url.Parse(raw)
+	if err != nil {
+		return err
+	}
+
+	if !uri.IsAbs() {
+		return fmt.Errorf("not an absolute uri")
+	}
+
+	if uri.User != nil {
+		return fmt.Errorf("uri must not have useinfo")
+	}
+
+	ok := false
+	switch uri.Scheme {
+	case "https":
+		ok = uri.Hostname() != ""
+	case "http":
+		ip := net.ParseIP(uri.Hostname())
+		ok = ip != nil && ip.IsLoopback()
+	default:
+		ok = uri.Opaque == ""
+	}
+
+	if !ok {
+		return fmt.Errorf("uri authority is invalid")
+	}
+
+	if uri.Fragment != "" || strings.Contains(raw, "#") {
+		return fmt.Errorf("uri must not contain a fragment")
+	}
+
+	if strings.ContainsRune(raw, '*') {
+		return fmt.Errorf("uri must not contain a wildcard")
+	}
+
+	return nil
 }
 
 func (s *Store) GetClient(id string) (*store.Client, error) {
