@@ -87,6 +87,10 @@ func TestStore_Register_RedirectURI(t *testing.T) {
 		// dot-segments
 		{name: "single dot path segment is rejected", uri: "https://example.com/./callback", wantErr: true},
 		{name: "double dot path segment is rejected", uri: "https://example.com/../callback", wantErr: true},
+
+		// empty segments
+		{name: "double slash in path is rejected", uri: "https://example.com/callback//x", wantErr: true},
+		{name: "trailing slash is accepted", uri: "https://example.com/callback/", wantErr: false},
 	}
 
 	for _, tt := range tests {

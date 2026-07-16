@@ -23,16 +23,15 @@ func NewStore() *Store {
 }
 
 func (s *Store) Register(id string, clientType store.ClientType, secret string, redirectURIs, grantTypes, scopes []string) (*store.Client, error) {
+	if err := validateRedirectUris(redirectURIs); err != nil {
+		return nil, err
+	}
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(secret), 12)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	for _, uri := range redirectURIs {
-		if err := isValidRedirectUrl(uri); err != nil {
-			return nil, fmt.Errorf("invalid redirect uri %s: %w", uri, err)
-		}
-	}
 	client := &store.Client{
 		ID:           id,
 		ClientType:   clientType,
@@ -44,9 +43,18 @@ func (s *Store) Register(id string, clientType store.ClientType, secret string, 
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	s.clients[id] = client
+
 	return client, nil
+}
+
+func validateRedirectUris(redirectUris []string) error {
+	for _, uri := range redirectUris {
+		if err := isValidRedirectUrl(uri); err != nil {
+			return fmt.Errorf("invalid redirect uri %s: %w", uri, err)
+		}
+	}
+	return nil
 }
 
 func isValidRedirectUrl(raw string) error {
@@ -63,23 +71,16 @@ func isValidRedirectUrl(raw string) error {
 		return fmt.Errorf("uri must not have useinfo")
 	}
 
-	ok := false
-	switch uri.Scheme {
-	case "https":
-		ok = uri.Hostname() != ""
-	case "http":
-		ip := net.ParseIP(uri.Hostname())
-		ok = ip != nil && ip.IsLoopback()
-	default:
-		ok = uri.Opaque == ""
-	}
-
-	if !ok {
+	if !hasValidAuthority(uri) {
 		return fmt.Errorf("uri authority is invalid")
 	}
 
 	if uri.Fragment != "" || strings.Contains(raw, "#") {
 		return fmt.Errorf("uri must not contain a fragment")
+	}
+
+	if hasUnsafePathSegments(uri.Path) {
+		return fmt.Errorf("uri path must not contain . or .. or empty segments")
 	}
 
 	if strings.ContainsRune(raw, '*') {
@@ -89,13 +90,38 @@ func isValidRedirectUrl(raw string) error {
 	return nil
 }
 
+func hasValidAuthority(uri *url.URL) bool {
+	switch uri.Scheme {
+	case "https":
+		return uri.Hostname() != ""
+	case "http":
+		ip := net.ParseIP(uri.Hostname())
+		return ip != nil && ip.IsLoopback()
+	default:
+		return uri.Opaque == ""
+	}
+}
+
+func hasUnsafePathSegments(path string) bool {
+	segments := strings.Split(path, "/")
+	for i, seg := range segments {
+		switch {
+		case seg == "." || seg == "..":
+			return true
+		case seg == "" && i > 0 && i < len(segments)-1:
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Store) GetClient(id string) (*store.Client, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	client, ok := s.clients[id]
 	if !ok {
-		return nil, fmt.Errorf("client %s not founa", id)
+		return nil, fmt.Errorf("client %s not found", id)
 	}
 
 	return client, nil
