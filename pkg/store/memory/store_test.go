@@ -5,31 +5,7 @@ import (
 	"yam/pkg/store"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/bcrypt"
 )
-
-func TestStore_Register(t *testing.T) {
-	s := NewStore()
-
-	id := "test-client"
-	secret := "tomatos are berries"
-	redirectURIs := []string{"https://example.com/callback"}
-	grantTypes := []string{"authorization_code"}
-	scopes := []string{"read", "write"}
-
-	client, err := s.Register(id, store.Confidential, secret, redirectURIs, grantTypes, scopes)
-	require.NoError(t, err, "Register should not return an error")
-
-	require.Equal(t, id, client.ID)
-	require.NotEqual(t, secret, client.Secret, "secret should be hashed, not stored in plaintext")
-
-	err = bcrypt.CompareHashAndPassword([]byte(client.Secret), []byte(secret))
-	require.NoError(t, err)
-
-	_, err = s.GetClient(id)
-	require.NoError(t, err)
-
-}
 
 func TestStore_Register_RedirectURI(t *testing.T) {
 	tests := []struct {
@@ -107,6 +83,35 @@ func TestStore_Register_RedirectURI(t *testing.T) {
 	}
 }
 
+func TestStore_Register_ClientTypeSecrets(t *testing.T) {
+	redirectURIs := []string{"https://example.com/callback"}
+	grantTypes := []string{"authorization_code"}
+	scopes := []string{"read"}
+
+	t.Run("public client with a secret is rejected", func(t *testing.T) {
+		s := NewStore()
+		_, err := s.Register("test-client", store.Public, "tomatos are berries", redirectURIs, grantTypes, scopes)
+		require.Error(t, err)
+
+		_, err = s.GetClient("test-client")
+		require.Error(t, err, "client should not have been persisted")
+	})
+
+	t.Run("public client without a secret is accepted and stores no secret", func(t *testing.T) {
+		s := NewStore()
+		client, err := s.Register("test-client", store.Public, "", redirectURIs, grantTypes, scopes)
+		require.NoError(t, err)
+		require.Empty(t, client.Secret, "public client should not have a stored secret")
+	})
+
+	t.Run("confidential client with a secret is accepted", func(t *testing.T) {
+		s := NewStore()
+		client, err := s.Register("test-client", store.Confidential, "tomatos are berries", redirectURIs, grantTypes, scopes)
+		require.NoError(t, err)
+		require.NotEmpty(t, client.Secret)
+	})
+}
+
 func TestStore_Register_RedirectURIs_OneInvalidFailsWholeRegistration(t *testing.T) {
 	s := NewStore()
 
@@ -143,4 +148,42 @@ func TestStore_Authenticate(t *testing.T) {
 
 	_, err = s.Authenticate("unknown-client", secret)
 	require.Error(t, err)
+}
+
+func TestStore_Authenticate_ClientTypes(t *testing.T) {
+	redirectURIs := []string{"https://example.com/callback"}
+	grantTypes := []string{"authorization_code"}
+	scopes := []string{"read"}
+
+	tests := []struct {
+		name           string
+		clientType     store.ClientType
+		registerSecret string
+		authSecret     string
+		wantErr        bool
+	}{
+		{name: "confidential client with correct secret succeeds", clientType: store.Confidential, registerSecret: "tomatos are berries", authSecret: "tomatos are berries", wantErr: false},
+		{name: "confidential client with wrong secret fails", clientType: store.Confidential, registerSecret: "tomatos are berries", authSecret: "wrong secret", wantErr: true},
+		{name: "confidential client with empty secret fails", clientType: store.Confidential, registerSecret: "tomatos are berries", authSecret: "", wantErr: true},
+		{name: "public client with empty secret succeeds", clientType: store.Public, registerSecret: "", authSecret: "", wantErr: false},
+		{name: "public client with a secret fails", clientType: store.Public, registerSecret: "", authSecret: "some-secret", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewStore()
+			id := "test-client"
+
+			_, err := s.Register(id, tt.clientType, tt.registerSecret, redirectURIs, grantTypes, scopes)
+			require.NoError(t, err)
+
+			client, err := s.Authenticate(id, tt.authSecret)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, id, client.ID)
+			}
+		})
+	}
 }

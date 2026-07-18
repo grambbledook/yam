@@ -27,15 +27,25 @@ func (s *Store) Register(id string, clientType store.ClientType, secret string, 
 		return nil, err
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(secret), 12)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
+	// OAuth 2.1 defines client types by credential possession: a client
+	// holding a secret is confidential by definition (draft-15 §2.1).
+	if clientType == store.Public && secret != "" {
+		return nil, fmt.Errorf("public client %s must not have a secret", id)
+	}
+
+	hashedSecret := ""
+	if clientType == store.Confidential {
+		hashed, err := bcrypt.GenerateFromPassword([]byte(secret), 12)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hash password: %w", err)
+		}
+		hashedSecret = string(hashed)
 	}
 
 	client := &store.Client{
 		ID:           id,
 		ClientType:   clientType,
-		Secret:       string(hashedPassword),
+		Secret:       hashedSecret,
 		RedirectURIs: redirectURIs,
 		GrantTypes:   grantTypes,
 		Scopes:       scopes,
@@ -131,6 +141,15 @@ func (s *Store) Authenticate(id, secret string) (*store.Client, error) {
 	client, err := s.GetClient(id)
 	if err != nil {
 		return nil, err
+	}
+
+	// Not an OAuth spec requirement, but Public clients have no secrets and having one here is suspicious.
+	if client.ClientType == store.Public && secret != "" {
+		return nil, fmt.Errorf("invalid credentials for client %s", id)
+	}
+
+	if client.ClientType == store.Public {
+		return client, nil
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(client.Secret), []byte(secret)); err != nil {
