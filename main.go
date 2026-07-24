@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 	"yam/pkg/config"
-	"yam/pkg/handler"
+	"yam/pkg/server"
 
 	"net/http"
 )
@@ -16,15 +16,8 @@ import (
 func main() {
 	cfg := config.Load()
 
-	mux := http.NewServeMux()
+	mux := server.NewMux()
 
-	mux.HandleFunc("GET /health", handler.HandleHealth)
-	mux.HandleFunc("GET /authorize", handler.HandleAuthorize)
-	mux.HandleFunc("POST /token", handler.HandleToken)
-	mux.HandleFunc("POST /introspect", handler.HandleIntrospect)
-	mux.HandleFunc("POST /revoke", handler.HandleRevoke)
-
-	http.ListenAndServe(cfg.Port, mux)
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: mux}
 	go func() {
 		log.Printf("Server starting on: %s\n", srv.Addr)
