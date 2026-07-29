@@ -2,6 +2,7 @@ package pkce
 
 import (
 	"crypto"
+	"crypto/subtle"
 	"encoding/base64"
 )
 
@@ -38,5 +39,5 @@ func VerifyCodeChallenge(verifier, challenge string, method CodeChallengeMethod)
 	hashed := sha.Sum(nil)
 
 	result := base64.RawURLEncoding.EncodeToString(hashed)
-	return result == challenge
+	return subtle.ConstantTimeCompare([]byte(result), []byte(challenge)) == 1
 }

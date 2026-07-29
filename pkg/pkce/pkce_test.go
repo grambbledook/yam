@@ -79,6 +79,20 @@ func TestVerifyCodeChallenge(t *testing.T) {
 			method:    CodeChallengeMethodPlain,
 			want:      false,
 		},
+		{
+			name:      "plain verifier equal to challenge is still rejected",
+			verifier:  "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+			challenge: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+			method:    CodeChallengeMethodPlain,
+			want:      false,
+		},
+		{
+			name:      "RFC 7636 Appendix B test vector",
+			verifier:  "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+			challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+			method:    CodeChallengeMethodS256,
+			want:      true,
+		},
 	}
 
 	for _, tt := range tests {
